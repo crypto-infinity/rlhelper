@@ -1,3 +1,9 @@
-numpy
+matplotlib
+box2d
 torch
-gymnasium>=0.28
+torchsummary
+seaborn
+opencv-python
+pyglet
+numpy
+gymnasium
