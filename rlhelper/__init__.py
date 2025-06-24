@@ -75,10 +75,26 @@ class RLHelper:
 
     # END INTERNAL METHODS
 
+    @staticmethod
+    def discretize_state(state, bins):
+        """
+        Discretize a continuous space into a single index.
+        Args:
+            state (np.ndarray): Observed state.
+            bins (list of np.ndarray): Bins for each dimensions.
+        Returns:
+            int: Discrete space unique index.
+        """
+        state_idx = []
+        for i, val in enumerate(state):
+            idx = np.digitize(val, bins[i])
+            state_idx.append(idx)
+        return np.ravel_multi_index(state_idx, [len(b)+1 for b in bins])
+
     # APIs
 
     @staticmethod
-    def q_learning(env, alpha=0.1, gamma=0.99, epsilon=0.1, episodes=10000, max_steps=100, verbose=False):
+    def q_learning(env, alpha=0.1, gamma=0.99, epsilon=0.1, episodes=10000, max_steps=100, verbose=False, bins=None):
         """
         Q-Learning algorithm for discrete environments.
 
@@ -94,13 +110,22 @@ class RLHelper:
             Q (np.ndarray): Learned Q-table.
             policy (np.ndarray): Policy derived from the Q-table.
         """
-        n_states = env.observation_space.n
+        if hasattr(env.observation_space, "n"):
+            n_states = env.observation_space.n
+            discretize = False
+        else:
+            if bins is None:
+                raise ValueError("Per ambienti con observation_space di tipo Box è necessario fornire il parametro bins.")
+            n_states = np.prod([len(b)+1 for b in bins])
+            discretize = True
         n_actions = env.action_space.n
         Q = np.zeros((n_states, n_actions))
 
         for episode in range(episodes):
             epsilon = max(0.01, epsilon - 0.01)
             state = env.reset()[0]
+            if discretize:
+                state = RLHelper.discretize_state(state, bins)
 
             for step in range(max_steps):
                 if random.uniform(0, 1) < epsilon:
@@ -109,6 +134,8 @@ class RLHelper:
                     action = np.argmax(Q[state, :])
 
                 next_state, reward, done, _, _ = env.step(action)
+                if discretize:
+                    next_state = RLHelper.discretize_state(next_state, bins)
 
                 if done and reward <= 0:
                     reward = -1
@@ -131,7 +158,7 @@ class RLHelper:
         return Q, policy
 
     @staticmethod
-    def sarsa(env, alpha=0.1, gamma=0.99, epsilon=0.1, episodes=10000, max_steps=100, verbose=False):
+    def sarsa(env, alpha=0.1, gamma=0.99, epsilon=0.1, episodes=10000, max_steps=100, verbose=False, bins=None):
         """
         SARSA algorithm for discrete environments.
 
@@ -147,13 +174,22 @@ class RLHelper:
             Q (np.ndarray): Learned Q-table.
             policy (np.ndarray): Policy derived from the Q-table.
         """
-        n_states = env.observation_space.n
+        if hasattr(env.observation_space, "n"):
+            n_states = env.observation_space.n
+            discretize = False
+        else:
+            if bins is None:
+                raise ValueError("Per ambienti con observation_space di tipo Box è necessario fornire il parametro bins.")
+            n_states = np.prod([len(b)+1 for b in bins])
+            discretize = True
         n_actions = env.action_space.n
         Q = np.zeros((n_states, n_actions))
 
         for episode in range(episodes):
             epsilon = max(0.01, epsilon - 0.01)
             state = env.reset()[0]
+            if discretize:
+                state = RLHelper.discretize_state(state, bins)
 
             if random.uniform(0, 1) < epsilon:
                 action = env.action_space.sample()
@@ -162,6 +198,8 @@ class RLHelper:
 
             for step in range(max_steps):
                 next_state, reward, done, _, _ = env.step(action)
+                if discretize:
+                    next_state = RLHelper.discretize_state(next_state, bins)
 
                 if done and reward <= 0:
                     reward = -1
@@ -190,7 +228,7 @@ class RLHelper:
         return Q, policy
 
     @staticmethod
-    def dyna_q(env, alpha=0.1, gamma=0.99, epsilon=0.1, episodes=1000, planning=10):
+    def dyna_q(env, alpha=0.1, gamma=0.99, epsilon=0.1, episodes=1000, planning=10, bins=None):
         """
         Dyna-Q algorithm for discrete tabular environments.
         Combines direct learning from the environment and planning using a model.
@@ -207,7 +245,14 @@ class RLHelper:
             model (dict): Model of observed transitions {(state, action): (reward, next_state)}.
             policy (np.ndarray): Policy derived from the Q-table.
         """
-        n_states = env.observation_space.n
+        if hasattr(env.observation_space, "n"):
+            n_states = env.observation_space.n
+            discretize = False
+        else:
+            if bins is None:
+                raise ValueError("Per ambienti con observation_space di tipo Box è necessario fornire il parametro bins.")
+            n_states = np.prod([len(b)+1 for b in bins])
+            discretize = True
         n_current_actions = env.current_action_space.n
         Q = np.zeros((n_states, n_current_actions))
         model = {}
@@ -216,6 +261,8 @@ class RLHelper:
             done = False
             epsilon = max(0.01, epsilon - 0.01)
             state = env.reset()[0]
+            if discretize:
+                state = RLHelper.discretize_state(state, bins)
 
             while not done:
                 if random.uniform(0, 1) < epsilon:
@@ -224,6 +271,8 @@ class RLHelper:
                     current_action = np.argmax(Q[state, :])
 
                 next_state, reward, done, _, _ = env.step(current_action)
+                if discretize:
+                    next_state = RLHelper.discretize_state(next_state, bins)
                 model[(state, current_action)] = (reward, next_state)
 
                 if random.uniform(0, 1) < epsilon:
